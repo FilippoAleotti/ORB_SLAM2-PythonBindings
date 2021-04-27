@@ -1,6 +1,6 @@
 #define PY_ARRAY_UNIQUE_SYMBOL pbcvt_ARRAY_API
 #include <opencv2/core/core.hpp>
-#include <pyboostcvconverter/pyboostcvconverter.hpp>
+#include "pyboostcvconverter/pyboostcvconverter.hpp"
 #include <ORB_SLAM3/KeyFrame.h>
 #include <ORB_SLAM3/Converter.h>
 #include <ORB_SLAM3/Tracking.h>
@@ -20,7 +20,6 @@ static void init_ar()
 {
 #endif
     Py_Initialize();
-
     import_array();
     return NUMPY_IMPORT_ARRAY_RETVAL;
 }
@@ -28,7 +27,7 @@ static void init_ar()
 BOOST_PYTHON_MODULE(orbslam3)
 {
     init_ar();
-
+    boost::python::numpy::initialize();
     boost::python::to_python_converter<cv::Mat, pbcvt::matToNDArrayBoostConverter>();
     pbcvt::matFromNDArrayBoostConverter();
 
@@ -42,15 +41,21 @@ BOOST_PYTHON_MODULE(orbslam3)
     boost::python::enum_<ORB_SLAM3::System::eSensor>("Sensor")
         .value("MONOCULAR", ORB_SLAM3::System::eSensor::MONOCULAR)
         .value("STEREO", ORB_SLAM3::System::eSensor::STEREO)
-        .value("RGBD", ORB_SLAM3::System::eSensor::RGBD);
+        .value("RGBD", ORB_SLAM3::System::eSensor::RGBD)
+        .value("IMU_MONOCULAR", ORB_SLAM3::System::eSensor::IMU_MONOCULAR)
+        .value("IMU_STEREO", ORB_SLAM3::System::eSensor::IMU_STEREO);
 
     boost::python::class_<ORBSlamPython, boost::noncopyable>("System", boost::python::init<const char *, const char *, boost::python::optional<ORB_SLAM3::System::eSensor>>())
         .def(boost::python::init<std::string, std::string, boost::python::optional<ORB_SLAM3::System::eSensor>>())
         .def("initialize", &ORBSlamPython::initialize)
         .def("load_and_process_mono", &ORBSlamPython::loadAndProcessMono)
         .def("process_image_mono", &ORBSlamPython::processMono)
+        .def("load_and_process_imu_mono", &ORBSlamPython::loadAndProcessImuMono)
+        .def("process_image_imu_mono", &ORBSlamPython::processImuMono)
         .def("load_and_process_stereo", &ORBSlamPython::loadAndProcessStereo)
         .def("process_image_stereo", &ORBSlamPython::processStereo)
+        .def("load_and_process_imu_stereo", &ORBSlamPython::loadAndProcessImuStereo)
+        .def("process_image_imu_stereo", &ORBSlamPython::processImuStereo)
         .def("load_and_process_rgbd", &ORBSlamPython::loadAndProcessRGBD)
         .def("process_image_rgbd", &ORBSlamPython::processRGBD)
         .def("shutdown", &ORBSlamPython::shutdown)
@@ -134,6 +139,9 @@ bool ORBSlamPython::loadAndProcessMono(std::string imageFile, double timestamp)
     }
     return this->processMono(im, timestamp, imageFile);
 }
+// helper function to convert ndarray to vector<ORB_SLAM3::IMU::Point>
+
+vector<ORB_SLAM3::IMU::Point> convertImuFromNDArray(boost::python::numpy::ndarray imu);
 
 bool ORBSlamPython::processMono(cv::Mat image, double timestamp, std::string imageFile)
 {
@@ -144,6 +152,39 @@ bool ORBSlamPython::processMono(cv::Mat image, double timestamp, std::string ima
     if (image.data)
     {
         cv::Mat pose = system->TrackMonocular(image, timestamp, vector<ORB_SLAM3::IMU::Point>(), imageFile);
+        return !pose.empty();
+    }
+    else
+    {
+        return false;
+    }
+}
+
+bool ORBSlamPython::loadAndProcessImuMono(std::string imageFile, double timestamp, boost::python::numpy::ndarray imu)
+{
+
+    if (!system)
+    {
+        return false;
+    }
+    cv::Mat im = cv::imread(imageFile, cv::IMREAD_COLOR);
+    if (bUseRGB)
+    {
+        cv::cvtColor(im, im, cv::COLOR_BGR2RGB);
+    }
+    return this->processImuMono(im, timestamp, imageFile, imu);
+}
+
+bool ORBSlamPython::processImuMono(cv::Mat image, double timestamp, std::string imageFile, boost::python::numpy::ndarray imu)
+{
+    if (!system)
+    {
+        return false;
+    }
+    if (image.data)
+    {
+        vector<ORB_SLAM3::IMU::Point> vImuMeas = convertImuFromNDArray(imu);
+        cv::Mat pose = system->TrackMonocular(image, timestamp, vImuMeas);
         return !pose.empty();
     }
     else
@@ -177,6 +218,40 @@ bool ORBSlamPython::processStereo(cv::Mat leftImage, cv::Mat rightImage, double 
     if (leftImage.data && rightImage.data)
     {
         cv::Mat pose = system->TrackStereo(leftImage, rightImage, timestamp);
+        return !pose.empty();
+    }
+    else
+    {
+        return false;
+    }
+}
+
+bool ORBSlamPython::loadAndProcessImuStereo(std::string leftImageFile, std::string rightImageFile, double timestamp, boost::python::numpy::ndarray imu)
+{
+    if (!system)
+    {
+        return false;
+    }
+    cv::Mat leftImage = cv::imread(leftImageFile, cv::IMREAD_COLOR);
+    cv::Mat rightImage = cv::imread(rightImageFile, cv::IMREAD_COLOR);
+    if (bUseRGB)
+    {
+        cv::cvtColor(leftImage, leftImage, cv::COLOR_BGR2RGB);
+        cv::cvtColor(rightImage, rightImage, cv::COLOR_BGR2RGB);
+    }
+    return this->processImuStereo(leftImage, rightImage, timestamp, imu);
+}
+
+bool ORBSlamPython::processImuStereo(cv::Mat leftImage, cv::Mat rightImage, double timestamp, boost::python::numpy::ndarray imu)
+{
+    if (!system)
+    {
+        return false;
+    }
+    if (leftImage.data && rightImage.data)
+    {
+        vector<ORB_SLAM3::IMU::Point> vImuMeas = convertImuFromNDArray(imu);
+        cv::Mat pose = system->TrackStereo(leftImage, rightImage, timestamp, vImuMeas);
         return !pose.empty();
     }
     else
@@ -668,4 +743,24 @@ boost::python::list readSequence(cv::FileNode fn, int depth)
         }
     }
     return sequence;
+}
+
+vector<ORB_SLAM3::IMU::Point> convertImuFromNDArray(boost::python::numpy::ndarray imu)
+{
+    vector<ORB_SLAM3::IMU::Point> vImuMeas;
+    double vAccX, vAccY, vAccZ, vGyroX, vGyroY, vGyroZ;
+    float vTimestamp;
+    Py_intptr_t const *strides = imu.get_strides();
+    for (int i = 0; i < imu.shape(0); i++)
+    {
+        vAccX = *reinterpret_cast<float const *>(imu.get_data() + i * strides[0] + 0 * strides[1]);
+        vAccY = *reinterpret_cast<float const *>(imu.get_data() + i * strides[0] + 1 * strides[1]);
+        vAccZ = *reinterpret_cast<float const *>(imu.get_data() + i * strides[0] + 2 * strides[1]);
+        vGyroX = *reinterpret_cast<float const *>(imu.get_data() + i * strides[0] + 3 * strides[1]);
+        vGyroY = *reinterpret_cast<float const *>(imu.get_data() + i * strides[0] + 4 * strides[1]);
+        vGyroZ = *reinterpret_cast<float const *>(imu.get_data() + i * strides[0] + 5 * strides[1]);
+        vTimestamp = *reinterpret_cast<double const *>(imu.get_data() + i * strides[0] + 6 * strides[1]);
+        vImuMeas.push_back(ORB_SLAM3::IMU::Point(vAccX, vAccY, vAccZ, vGyroX, vGyroY, vGyroZ, vTimestamp));
+    }
+    return vImuMeas;
 }

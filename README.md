@@ -1,6 +1,6 @@
-# ORB_SLAM2-PythonBindings
+# ORB_SLAM3-PythonBindings
 
-A python wrapper for ORB_SLAM3, which can be found at [https://github.com/UZ-SLAMLab/ORB_SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3).
+A python wrapper for ORB_SLAM3, which can be found at [ORB_SLAM3](https://github.com/GiordanoLaminetti/ORB_SLAM3).
 This is designed to work with the base version of ORB_SLAM3, with a couple of minimal API changes to access the system output.
 It has been tested on ubuntu 14.04 and 16.04 and built against Python3, although it does not rely on any python3 features.
 
@@ -14,7 +14,10 @@ It has been tested on ubuntu 14.04 and 16.04 and built against Python3, although
 - Numpy development headers (to represent images in python, automatically converted to cv::Mat)
 
 ### Setup
-
+## clone the repo
+```
+git clone -b ORBSLAM3 https://github.com/GiordanoLaminetti/ORB_SLAM2-PythonBindings.git
+```
 #### Compilation
 
 Return to the ORBSLAM-Python source, build and install it by running
@@ -56,6 +59,6 @@ You will also need to change the install location on line 73 of CMakeLists.txt t
 
 ## License
 
-This code is licensed under the BSD Simplified license, although it requires and links to ORB_SLAM2, which is available under the GPLv3 license
+This code is licensed under the BSD Simplified license, although it requires and links to ORB_SLAM3, which is available under the GPLv3 license
 
 It uses pyboostcvconverter (https://github.com/Algomorph/pyboostcvconverter) by Gregory Kramida under the MIT licence (see pyboostcvconverter-LICENSE).
