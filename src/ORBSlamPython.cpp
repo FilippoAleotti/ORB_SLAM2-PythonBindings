@@ -72,6 +72,7 @@ BOOST_PYTHON_MODULE(orbslam3)
         .def("get_keyframe_points", &ORBSlamPython::getKeyframePoints)
         .def("get_trajectory_points", &ORBSlamPython::getTrajectoryPoints)
         .def("get_tracked_mappoints", &ORBSlamPython::getTrackedMappoints)
+        .def("get_tracked_3dpoints_with_image_coords", &ORBSlamPython::getTrackedPointsWithImageCoords)
         .def("get_tracking_state", &ORBSlamPython::getTrackingState)
         .def("get_num_features", &ORBSlamPython::getNumFeatures)
         .def("get_num_matched_features", &ORBSlamPython::getNumMatches)
@@ -460,6 +461,62 @@ boost::python::list ORBSlamPython::getCurrentPoints() const
                     boost::python::make_tuple(
                         Kps[i].pt.x,
                         Kps[i].pt.y)));
+            }
+        }
+        return map_points;
+    }
+    return boost::python::list();
+}
+
+boost::python::list ORBSlamPython::getTrackedPointsWithImageCoords() const
+{
+    if (system)
+    {
+        vector<ORB_SLAM3::MapPoint *> Mps = system->GetTrackedMapPoints();
+        boost::python::list tracked_map_points;
+
+        ORB_SLAM3::Tracking *pTracker = system->GetTracker();
+        boost::python::list map_points;
+        unsigned int num = pTracker->mCurrentFrame.mvKeys.size();
+        vector<cv::KeyPoint> Kps = pTracker->mCurrentFrame.mvKeysUn;
+        if (pTracker->mCurrentFrame.mvpMapPoints.size() < num)
+        {
+            num = pTracker->mCurrentFrame.mvpMapPoints.size();
+        }
+        if (pTracker->mCurrentFrame.mvbOutlier.size() < num)
+        {
+            num = pTracker->mCurrentFrame.mvbOutlier.size();
+        }
+        for (unsigned int i = 0; i < num; ++i)
+        {
+            ORB_SLAM3::MapPoint *pMP = pTracker->mCurrentFrame.mvpMapPoints[i];
+            if (pMP && !pTracker->mCurrentFrame.mvbOutlier[i] && pMP->Observations() > 0)
+            {
+                cv::Mat wp = pMP->GetWorldPos();
+                // now, check if it is tracked or not
+                bool found = false;
+                for (size_t j = 0; j < Mps.size(); j++)
+                {
+                    if (Mps[i] != NULL)
+                    {
+                        cv::Mat twp = Mps[i]->GetWorldPos();
+                        if ((wp.at<float>(0, 0) == twp.at<float>(0, 0)) &&
+                            (wp.at<float>(1, 0) == twp.at<float>(1, 0)) &&
+                            (wp.at<float>(2, 0) == twp.at<float>(2, 0)))
+                            found = true;
+                    }
+                    if (found == true)
+                        break;
+                }
+                if (found == true)
+                    map_points.append(boost::python::make_tuple(
+                        boost::python::make_tuple(
+                            wp.at<float>(0, 0),
+                            wp.at<float>(1, 0),
+                            wp.at<float>(2, 0)),
+                        boost::python::make_tuple(
+                            Kps[i].pt.x,
+                            Kps[i].pt.y)));
             }
         }
         return map_points;

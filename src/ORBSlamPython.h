@@ -43,6 +43,8 @@ public:
     boost::python::list getKeyframePoints() const;
     boost::python::list getTrajectoryPoints() const;
     boost::python::list getTrackedMappoints() const;
+    boost::python::list getTrackedPointsWithImageCoords() const;
+
     bool saveSettings(boost::python::dict settings) const;
     boost::python::dict loadSettings() const;
     void setMode(ORB_SLAM3::System::eSensor mode);
