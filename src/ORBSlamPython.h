@@ -43,7 +43,7 @@ public:
     boost::python::list getKeyframePoints() const;
     boost::python::list getTrajectoryPoints() const;
     boost::python::list getTrackedMappoints() const;
-    boost::python::list getTrackedPointsWithImageCoords() const;
+    boost::python::list get3dCloud() const;
 
     bool saveSettings(boost::python::dict settings) const;
     boost::python::dict loadSettings() const;
