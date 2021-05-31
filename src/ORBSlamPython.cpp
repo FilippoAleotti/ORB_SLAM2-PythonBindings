@@ -79,6 +79,7 @@ BOOST_PYTHON_MODULE(orbslam3)
         .def("save_settings", &ORBSlamPython::saveSettings)
         .def("load_settings", &ORBSlamPython::loadSettings)
         .def("save_settings_file", &ORBSlamPython::saveSettingsFile)
+        .def("save_trajectory", &ORBSlamPython::saveTrajectory)
         .staticmethod("save_settings_file")
         .def("load_settings_file", &ORBSlamPython::loadSettingsFile)
         .staticmethod("load_settings_file");
@@ -318,6 +319,14 @@ void ORBSlamPython::deactivateSLAMTraking()
     }
 }
 
+void ORBSlamPython::saveTrajectory(std::string filepath)
+{
+    if (system)
+    {
+        return system->SaveTrajectoryTUM(filepath);
+    }
+}
+
 ORB_SLAM3::Tracking::eTrackingState ORBSlamPython::getTrackingState() const
 {
     if (system)
@@ -457,7 +466,8 @@ boost::python::list ORBSlamPython::getCurrentPoints() const
                     boost::python::make_tuple(
                         wp.at<float>(0, 0),
                         wp.at<float>(1, 0),
-                        wp.at<float>(2, 0)),
+                        wp.at<float>(2, 0),
+                        pMP->mnId),
                     boost::python::make_tuple(
                         Kps[i].pt.x,
                         Kps[i].pt.y)));

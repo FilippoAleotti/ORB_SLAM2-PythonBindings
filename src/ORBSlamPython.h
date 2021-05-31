@@ -44,7 +44,7 @@ public:
     boost::python::list getTrajectoryPoints() const;
     boost::python::list getTrackedMappoints() const;
     boost::python::list get3dCloud() const;
-
+    void saveTrajectory(std::string filepath);
     bool saveSettings(boost::python::dict settings) const;
     boost::python::dict loadSettings() const;
     void setMode(ORB_SLAM3::System::eSensor mode);
