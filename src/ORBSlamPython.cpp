@@ -448,14 +448,7 @@ boost::python::list ORBSlamPython::getCurrentPoints() const
         boost::python::list map_points;
         unsigned int num = pTracker->mCurrentFrame.mvKeys.size();
         vector<cv::KeyPoint> Kps = pTracker->mCurrentFrame.mvKeysUn;
-        if (pTracker->mCurrentFrame.mvpMapPoints.size() < num)
-        {
-            num = pTracker->mCurrentFrame.mvpMapPoints.size();
-        }
-        if (pTracker->mCurrentFrame.mvbOutlier.size() < num)
-        {
-            num = pTracker->mCurrentFrame.mvbOutlier.size();
-        }
+
         for (unsigned int i = 0; i < num; ++i)
         {
             ORB_SLAM3::MapPoint *pMP = pTracker->mCurrentFrame.mvpMapPoints[i];
