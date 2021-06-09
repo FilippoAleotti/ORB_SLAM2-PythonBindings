@@ -588,7 +588,7 @@ boost::python::list ORBSlamPython::getFinalPoints() const
                             Kps[i].pt.y)));
             }
         }
-        frames.append(boost::python::make_tuple(timestamp, boost::python::make_tuple(points), boost::python::make_tuple(Tcw)));
+        frames.append(boost::python::make_tuple(timestamp, points, boost::python::make_tuple(Tcw)));
     }
 
     return frames;
