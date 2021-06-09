@@ -70,6 +70,7 @@ BOOST_PYTHON_MODULE(orbslam3)
         .def("set_mode", &ORBSlamPython::setMode)
         .def("set_use_viewer", &ORBSlamPython::setUseViewer)
         .def("get_final_points", &ORBSlamPython::getFinalPoints)
+        .def("get_final_points_from_keyframes", &ORBSlamPython::getFinalPointsFromKF)
         .def("get_tracked_mappoints", &ORBSlamPython::getTrackedMappoints)
         .def("get_3d_cloud", &ORBSlamPython::get3dCloud)
         .def("get_tracking_state", &ORBSlamPython::getTrackingState)
@@ -79,6 +80,7 @@ BOOST_PYTHON_MODULE(orbslam3)
         .def("load_settings", &ORBSlamPython::loadSettings)
         .def("save_settings_file", &ORBSlamPython::saveSettingsFile)
         .def("save_trajectory", &ORBSlamPython::saveTrajectory)
+        .def("save_keyframe_trajectory", &ORBSlamPython::saveKeyFrameTrajectory)
         .staticmethod("save_settings_file")
         .def("load_settings_file", &ORBSlamPython::loadSettingsFile)
         .staticmethod("load_settings_file");
@@ -320,6 +322,11 @@ void ORBSlamPython::deactivateSLAMTraking()
 void ORBSlamPython::saveTrajectory(std::string filepath)
 {
     system->SaveTrajectoryTUM(filepath);
+}
+
+void ORBSlamPython::saveKeyFrameTrajectory(std::string filepath)
+{
+    system->SaveKeyFrameTrajectoryTUM(filepath);
 }
 
 ORB_SLAM3::Tracking::eTrackingState ORBSlamPython::getTrackingState() const
@@ -589,6 +596,70 @@ boost::python::list ORBSlamPython::getFinalPoints() const
             }
         }
         frames.append(boost::python::make_tuple(timestamp, points, boost::python::make_tuple(Tcw)));
+    }
+
+    return frames;
+}
+
+// get points at the end of the sequence, expressed in the camera reference system for KF
+// For each keyframe, it returns (lt, ((X,Y,Z,ID), (u,v)), (pose)):
+// * stamp: timestamp
+// * X,Y,Z,ID for each map point in the keyframe
+// * u,v for each pixel corresponding to map points
+// * pose: w2c transformation
+boost::python::list ORBSlamPython::getFinalPointsFromKF() const
+{
+    if (!system)
+    {
+        return boost::python::list();
+    }
+
+    vector<ORB_SLAM3::KeyFrame *> vpKFs = system->GetKeyFrames();
+    std::sort(vpKFs.begin(), vpKFs.end(), ORB_SLAM3::KeyFrame::lId);
+
+    boost::python::list frames;
+    ORB_SLAM3::Tracking *mpTracker = system->GetTracker();
+
+    for (size_t i = 0; i < vpKFs.size(); i++)
+    {
+        ORB_SLAM3::KeyFrame *pKF = vpKFs[i];
+
+        if (pKF->isBad())
+            continue;
+
+        boost::python::list timestamp;
+        timestamp.append(pKF->mTimeStamp);
+
+        boost::python::list Tcw;
+        Tcw.append(pKF->GetPose());
+
+        // now, extract the map points related to this keyframe
+        unsigned int num = pKF->mvKeysUn.size();
+        vector<cv::KeyPoint> Kps = pKF->mvKeysUn;
+
+        if (num == 0)
+            continue;
+        boost::python::list points;
+
+        for (unsigned int i = 0; i < num; ++i)
+        {
+            //NOTE: map points from KF have to be accessed using the get function, due to concurrence
+            ORB_SLAM3::MapPoint *pMP = pKF->GetMapPoint(i);
+            if (pMP && pMP->Observations() > 0)
+            {
+                cv::Mat wp = pMP->GetWorldPos();
+                points.append(
+                    boost::python::make_tuple(
+                        boost::python::make_tuple(
+                            wp.at<float>(0, 0),
+                            wp.at<float>(1, 0),
+                            wp.at<float>(2, 0), pMP->mnId),
+                        boost::python::make_tuple(
+                            Kps[i].pt.x,
+                            Kps[i].pt.y)));
+            }
+        }
+        frames.append(boost::python::make_tuple(timestamp, points, Tcw));
     }
 
     return frames;

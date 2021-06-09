@@ -41,9 +41,12 @@ public:
     unsigned int getNumMatches() const;
     boost::python::tuple getDistCoeff() const;
     boost::python::list getFinalPoints() const;
+    boost::python::list getFinalPointsFromKF() const;
     boost::python::list getTrackedMappoints() const;
     boost::python::list get3dCloud() const;
     void saveTrajectory(std::string filepath);
+    void saveKeyFrameTrajectory(std::string filepath);
+
     bool saveSettings(boost::python::dict settings) const;
     boost::python::dict loadSettings() const;
     void setMode(ORB_SLAM3::System::eSensor mode);
