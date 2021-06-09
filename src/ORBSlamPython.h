@@ -36,12 +36,11 @@ public:
     boost::python::list getCurrentPoints() const;
     ORB_SLAM3::Tracking::eTrackingState getTrackingState() const;
     PyObject *getCameraMatrix() const;
-    PyObject *getFramePose() const;
+    PyObject *getW2CTransformation() const;
     unsigned int getNumFeatures() const;
     unsigned int getNumMatches() const;
     boost::python::tuple getDistCoeff() const;
-    boost::python::list getKeyframePoints() const;
-    boost::python::list getTrajectoryPoints() const;
+    boost::python::list getFinalPoints() const;
     boost::python::list getTrackedMappoints() const;
     boost::python::list get3dCloud() const;
     void saveTrajectory(std::string filepath);

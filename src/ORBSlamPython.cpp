@@ -64,13 +64,12 @@ BOOST_PYTHON_MODULE(orbslam3)
         .def("activateSLAM", &ORBSlamPython::activateSLAMTraking)
         .def("deactivateSLAM", &ORBSlamPython::deactivateSLAMTraking)
         .def("get_current_points", &ORBSlamPython::getCurrentPoints)
-        .def("get_frame_pose", &ORBSlamPython::getFramePose)
+        .def("get_w2c_transformation", &ORBSlamPython::getW2CTransformation)
         .def("get_camera_matrix", &ORBSlamPython::getCameraMatrix)
         .def("get_dist_coef", &ORBSlamPython::getDistCoeff)
         .def("set_mode", &ORBSlamPython::setMode)
         .def("set_use_viewer", &ORBSlamPython::setUseViewer)
-        .def("get_keyframe_points", &ORBSlamPython::getKeyframePoints)
-        .def("get_trajectory_points", &ORBSlamPython::getTrajectoryPoints)
+        .def("get_final_points", &ORBSlamPython::getFinalPoints)
         .def("get_tracked_mappoints", &ORBSlamPython::getTrackedMappoints)
         .def("get_3d_cloud", &ORBSlamPython::get3dCloud)
         .def("get_tracking_state", &ORBSlamPython::getTrackingState)
@@ -299,7 +298,6 @@ void ORBSlamPython::shutdown()
     if (system)
     {
         system->Shutdown();
-        system.reset();
     }
 }
 
@@ -321,10 +319,7 @@ void ORBSlamPython::deactivateSLAMTraking()
 
 void ORBSlamPython::saveTrajectory(std::string filepath)
 {
-    if (system)
-    {
-        return system->SaveTrajectoryTUM(filepath);
-    }
+    system->SaveTrajectoryTUM(filepath);
 }
 
 ORB_SLAM3::Tracking::eTrackingState ORBSlamPython::getTrackingState() const
@@ -374,45 +369,6 @@ unsigned int ORBSlamPython::getNumMatches() const
     return 0;
 }
 
-boost::python::list ORBSlamPython::getKeyframePoints() const
-{
-    if (!system)
-    {
-        return boost::python::list();
-    }
-
-    // This is copied from the ORB_SLAM3 System.SaveKeyFrameTrajectoryTUM function, with some changes to output a python tuple.
-    vector<ORB_SLAM3::KeyFrame *> vpKFs = system->GetKeyFrames();
-    std::sort(vpKFs.begin(), vpKFs.end(), ORB_SLAM3::KeyFrame::lId);
-
-    // Transform all keyframes so that the first keyframe is at the origin.
-    // After a loop closure the first keyframe might not be at the origin.
-    //cv::Mat Two = vpKFs[0]->GetPoseInverse();
-
-    boost::python::list trajectory;
-
-    for (size_t i = 0; i < vpKFs.size(); i++)
-    {
-        ORB_SLAM3::KeyFrame *pKF = vpKFs[i];
-
-        // pKF->SetPose(pKF->GetPose()*Two);
-
-        if (pKF->isBad())
-            continue;
-
-        cv::Mat R = pKF->GetRotation().t();
-        cv::Mat t = pKF->GetCameraCenter();
-        PyObject *Rarr = pbcvt::fromMatToNDArray(R);
-        PyObject *Tarr = pbcvt::fromMatToNDArray(t);
-        trajectory.append(boost::python::make_tuple(
-            pKF->mTimeStamp,
-            boost::python::handle<>(Rarr),
-            boost::python::handle<>(Tarr)));
-    }
-
-    return trajectory;
-}
-
 boost::python::list ORBSlamPython::getTrackedMappoints() const
 {
     if (!system)
@@ -439,6 +395,8 @@ boost::python::list ORBSlamPython::getTrackedMappoints() const
     return map_points;
 }
 
+// get current tracked points, expressed in the world reference system
+// For each point, returns ((X,Y,Z,ID),(u,v))
 boost::python::list ORBSlamPython::getCurrentPoints() const
 {
     if (system)
@@ -446,7 +404,7 @@ boost::python::list ORBSlamPython::getCurrentPoints() const
 
         ORB_SLAM3::Tracking *pTracker = system->GetTracker();
         boost::python::list map_points;
-        unsigned int num = pTracker->mCurrentFrame.mvKeys.size();
+        unsigned int num = pTracker->mCurrentFrame.mvKeysUn.size();
         vector<cv::KeyPoint> Kps = pTracker->mCurrentFrame.mvKeysUn;
 
         for (unsigned int i = 0; i < num; ++i)
@@ -471,11 +429,16 @@ boost::python::list ORBSlamPython::getCurrentPoints() const
     return boost::python::list();
 }
 
-PyObject *ORBSlamPython::getFramePose() const
+PyObject *ORBSlamPython::getW2CTransformation() const
 {
     if (system)
     {
-
+        //NOTE: see these issues:
+        // https://github.com/raulmur/ORB_SLAM/issues/7
+        // https://github.com/raulmur/ORB_SLAM2/issues/428
+        // https://github.com/raulmur/ORB_SLAM2/issues/262
+        // Remember Tcw is the world pose in the camera reference, Twc, the camera pose in the world reference.
+        // Tcw is the w2c mapping
         ORB_SLAM3::Tracking *pTracker = system->GetTracker();
         cv::Mat pose = pTracker->mCurrentFrame.mTcw;
         if (pose.rows * pose.cols > 0)
@@ -543,27 +506,29 @@ boost::python::list ORBSlamPython::get3dCloud() const
     return map_points;
 }
 
-boost::python::list ORBSlamPython::getTrajectoryPoints() const
+// get points at the end of the sequence, expressed in the camera reference system
+// Returns a list values for keyframes. For each keyframe, it returns (lt, ((X,Y,Z,ID), (u,v)), (pose)):
+// * lT: timestamp
+// * X,Y,Z,ID for each map point in the keyframe
+// * u,v for each pixel corresponding to map points
+// * pose: w2c transformation
+boost::python::list ORBSlamPython::getFinalPoints() const
 {
     if (!system)
     {
         return boost::python::list();
     }
 
-    // This is copied from the ORB_SLAM3 System.SaveTrajectoryKITTI function, with some changes to output a python tuple.
     vector<ORB_SLAM3::KeyFrame *> vpKFs = system->GetKeyFrames();
     std::sort(vpKFs.begin(), vpKFs.end(), ORB_SLAM3::KeyFrame::lId);
 
     // Transform all keyframes so that the first keyframe is at the origin.
     // After a loop closure the first keyframe might not be at the origin.
-    // Of course, if we have no keyframes, then just use the identity matrix.
-    cv::Mat Two = cv::Mat::eye(4, 4, CV_32F);
-    if (vpKFs.size() > 0)
-    {
-        cv::Mat Two = vpKFs[0]->GetPoseInverse();
-    }
 
-    boost::python::list trajectory;
+    cv::Mat Two = vpKFs[0]->GetPoseInverse();
+
+    boost::python::list frames;
+    ORB_SLAM3::Tracking *mpTracker = system->GetTracker();
 
     // Frame pose is stored relative to its reference keyframe (which is optimized by BA and pose graph).
     // We need to get first the keyframe pose and then concatenate the relative transformation.
@@ -571,46 +536,61 @@ boost::python::list ORBSlamPython::getTrajectoryPoints() const
 
     // For each frame we have a reference keyframe (lRit), the timestamp (lT) and a flag
     // which is true when tracking failed (lbL).
-    std::list<ORB_SLAM3::KeyFrame *>::iterator lRit = system->GetTracker()->mlpReferences.begin();
-    std::list<double>::iterator lT = system->GetTracker()->mlFrameTimes.begin();
-    for (std::list<cv::Mat>::iterator lit = system->GetTracker()->mlRelativeFramePoses.begin(), lend = system->GetTracker()->mlRelativeFramePoses.end(); lit != lend; lit++, lRit++, lT++)
+    list<ORB_SLAM3::KeyFrame *>::iterator lRit = mpTracker->mlpReferences.begin();
+    list<double>::iterator lT = mpTracker->mlFrameTimes.begin();
+    list<bool>::iterator lbL = mpTracker->mlbLost.begin();
+    for (list<cv::Mat>::iterator lit = mpTracker->mlRelativeFramePoses.begin(),
+                                 lend = mpTracker->mlRelativeFramePoses.end();
+         lit != lend; lit++, lRit++, lT++, lbL++)
     {
+        if (*lbL)
+            continue;
+
         ORB_SLAM3::KeyFrame *pKF = *lRit;
 
         cv::Mat Trw = cv::Mat::eye(4, 4, CV_32F);
 
-        while (pKF != NULL && pKF->isBad())
+        // If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
+        while (pKF->isBad())
         {
-            ORB_SLAM3::KeyFrame *pKFParent;
-
-            // std::cout << "bad parent" << std::endl;
             Trw = Trw * pKF->mTcp;
-            pKFParent = pKF->GetParent();
-            if (pKFParent == pKF)
-            {
-                // We've found a frame that is it's own parent, presumably a root or something. Break out
-                break;
-            }
-            else
-            {
-                pKF = pKFParent;
-            }
+            pKF = pKF->GetParent();
         }
-        if (pKF != NULL && !pKF->isBad())
-        {
-            Trw = Trw * pKF->GetPose() * Two;
 
-            cv::Mat Tcw = (*lit) * Trw;
-            //cv::Mat Rwc = Tcw.rowRange(0, 3).colRange(0, 3).t();
-            //cv::Mat twc = -Rwc * Tcw.rowRange(0, 3).col(3);
-            PyObject *ndarr = pbcvt::fromMatToNDArray(Tcw);
-            trajectory.append(boost::python::make_tuple(
-                *lT,
-                boost::python::handle<>(ndarr)));
+        Trw = Trw * pKF->GetPose() * Two;
+
+        cv::Mat Tcw = (*lit) * Trw;
+
+        // now, extract the map points related to this keyframe
+        unsigned int num = pKF->mvKeysUn.size();
+        vector<cv::KeyPoint> Kps = pKF->mvKeysUn;
+
+        if (num == 0)
+            continue;
+        boost::python::list points;
+
+        for (unsigned int i = 0; i < num; ++i)
+        {
+            //NOTE: map points from KF have to be accessed using the get function, due to concurrence
+            ORB_SLAM3::MapPoint *pMP = pKF->GetMapPoint(i);
+            if (pMP && pMP->Observations() > 0)
+            {
+                cv::Mat wp = pMP->GetWorldPos();
+                points.append(
+                    boost::python::make_tuple(
+                        boost::python::make_tuple(
+                            wp.at<float>(0, 0),
+                            wp.at<float>(1, 0),
+                            wp.at<float>(2, 0), pMP->mnId),
+                        boost::python::make_tuple(
+                            Kps[i].pt.x,
+                            Kps[i].pt.y)));
+            }
         }
+        frames.append(boost::python::make_tuple(lT, points, Tcw));
     }
 
-    return trajectory;
+    return frames;
 }
 
 void ORBSlamPython::setMode(ORB_SLAM3::System::eSensor mode)
