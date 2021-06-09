@@ -508,7 +508,7 @@ boost::python::list ORBSlamPython::get3dCloud() const
 
 // get points at the end of the sequence, expressed in the camera reference system
 // Returns a list values for keyframes. For each keyframe, it returns (lt, ((X,Y,Z,ID), (u,v)), (pose)):
-// * lT: timestamp
+// * stamp: timestamp
 // * X,Y,Z,ID for each map point in the keyframe
 // * u,v for each pixel corresponding to map points
 // * pose: w2c transformation
@@ -547,9 +547,10 @@ boost::python::list ORBSlamPython::getFinalPoints() const
             continue;
 
         ORB_SLAM3::KeyFrame *pKF = *lRit;
+        boost::python::list timestamp;
+        timestamp.append(*lT);
 
         cv::Mat Trw = cv::Mat::eye(4, 4, CV_32F);
-
         // If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
         while (pKF->isBad())
         {
@@ -587,7 +588,7 @@ boost::python::list ORBSlamPython::getFinalPoints() const
                             Kps[i].pt.y)));
             }
         }
-        frames.append(boost::python::make_tuple(lT, points, Tcw));
+        frames.append(boost::python::make_tuple(timestamp, boost::python::make_tuple(points), boost::python::make_tuple(Tcw)));
     }
 
     return frames;
